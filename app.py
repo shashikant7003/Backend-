@@ -4,7 +4,7 @@ import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # 🔑 BotFather wala Token yahan daalo
-BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN_HERE"
+BOT_TOKEN = "8943067914:AAHmcBRgXzY0aJrrgDK4St0MzUZqDKihlqM"
 
 bot = telebot.TeleBot(BOT_TOKEN)
 user_data = {}
