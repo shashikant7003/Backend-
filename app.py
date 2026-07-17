@@ -1,24 +1,19 @@
-
-
 import os
-import time
+import requests
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-import yt_dlp
 
-# 🔑 Yahan BotFather se mila hua Token paste karo
-BOT_TOKEN = "8943067914:AAHmcBRgXzY0aJrrgDK4St0MzUZqDKihlqM"
+# 🔑 BotFather wala Token yahan daalo
+BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN_HERE"
 
 bot = telebot.TeleBot(BOT_TOKEN)
-
-# User ki temporary choices store karne ke liye dictionary
 user_data = {}
 
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
     welcome_text = (
-        "🚀 *Welcome to Private Downloader Bot!*\n\n"
-        "Mujhe koi bhi YouTube link bhejo, main aapko quality select karne ke options dunga aur video download karke de dunga. 😎"
+        "🚀 *Welcome to Universal Downloader Bot!*\n\n"
+        "Link bhejo aur quality select karke direct chat mein video pao. 😎"
     )
     bot.reply_to(message, welcome_text, parse_mode='Markdown')
 
@@ -27,29 +22,23 @@ def handle_link(message):
     url = message.text.strip()
     
     if "youtube.com" not in url and "youtu.be" not in url:
-        bot.reply_to(message, "❌ Kripya sirf valid YouTube ya Shorts ka link bhejein.")
+        bot.reply_to(message, "❌ Kripya valid YouTube ya Shorts ka link bhejein.")
         return
 
-    # User ke chat ID ke against URL save kar rahe hain
     user_data[message.chat.id] = {'url': url}
     
-    bot.send_chat_action(message.chat.id, 'typing')
-    
-    # Stylish Interactive Quality Buttons (Inline Keyboard)
     markup = InlineKeyboardMarkup()
     markup.row_width = 2
     markup.add(
-        InlineKeyboardButton("✨ 4K Ultra HD", callback_data="res_2160"),
-        InlineKeyboardButton("🌟 2K Quad HD", callback_data="res_1440"),
         InlineKeyboardButton("🎬 1080p Full HD", callback_data="res_1080"),
         InlineKeyboardButton("📱 720p HD", callback_data="res_720"),
-        InlineKeyboardButton("💿 480p SD", callback_data="res_480"),
+        InlineKeyboardButton("💿 480p/Best Avail", callback_data="res_max"),
         InlineKeyboardButton("🎵 MP3 Audio Only", callback_data="res_audio")
     )
     
     bot.send_message(
         message.chat.id, 
-        "📥 *Link Received!*\nNiche diye gaye buttons se video ki quality select karein:", 
+        "📥 *Link Received!*\nNiche se apni pasand ki quality select karein:", 
         reply_markup=markup, 
         parse_mode='Markdown'
     )
@@ -60,69 +49,70 @@ def process_quality(call):
     quality_choice = call.data.split('_')[1]
     
     if chat_id not in user_data or 'url' not in user_data[chat_id]:
-        bot.answer_callback_query(call.id, "Error: Link expired. Please send link again.")
+        bot.answer_callback_query(call.id, "Error: Link expired.")
         return
         
     url = user_data[chat_id]['url']
     
-    # Puraane inline buttons hata kar loading status dikhana
     bot.edit_message_text(
         chat_id=chat_id, 
         message_id=call.message.message_id, 
-        text="⏳ *Processing your request...* \nVideo fetch ki ja rahi hai, kripya thoda wait karein.", 
+        text="⏳ *Bypassing YouTube Security...*\nCobalt safe tunnel se video fetch ki ja rahi hai, kripya thoda wait karein.", 
         parse_mode='Markdown'
     )
     
-    # Quality format dynamically builder
-    if quality_choice == 'audio':
-        ydl_format = 'bestaudio/best'
-        ext = 'mp3'
-    else:
-        ydl_format = f'bestvideo[height<={quality_choice}]+bestaudio/best[height<={quality_choice}]/best'
-        ext = 'mp4'
-
-    if not os.path.exists('downloads'):
-        os.makedirs('downloads')
-
-    # Bypassing using dynamic mobile client strings
-    ydl_opts = {
-        'format': ydl_format,
-        'outtmpl': f'downloads/{chat_id}_%(title)s.%(ext)s',
-        'merge_output_format': 'mp4' if quality_choice != 'audio' else None,
-        'extractor_args': {'youtube': {'player_client': ['ios', 'android']}},
-        'nocheckcertificate': True,
-        'quiet': True
+    # Cobalt API setup
+    cobalt_url = "https://api.cobalt.tools/"
+    headers = {"Accept": "application/json", "Content-Type": "application/json"}
+    
+    payload = {
+        "url": url,
+        "videoQuality": "720" if quality_choice == '720' else "1080",
+        "downloadMode": "audio" if quality_choice == 'audio' else "auto"
     }
-
+    
     try:
-        # Telegram action to show uploading state
-        bot.send_chat_action(chat_id, 'upload_document')
-        
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
-            if quality_choice == 'audio' and not filename.endswith('.mp3'):
-                # Handle renaming extension if needed
-                pass
+        # Cobalt mirror pairs check karne ke liye auto-switch logic
+        response = requests.post("https://co.wuk.sh/api/json", json=payload, headers=headers, timeout=12)
+        if response.status_code != 200:
+            response = requests.post(cobalt_url, json=payload, headers=headers, timeout=12)
+            
+        if response.status_code == 200:
+            res_data = response.json()
+            stream_url = res_data.get('url')
+            
+            if stream_url:
+                bot.send_chat_action(chat_id, 'upload_document')
                 
-        # Send final file to Telegram Chat
-        with open(filename, 'rb') as video_file:
-            if quality_choice == 'audio':
-                bot.send_audio(chat_id, video_file, caption="🎵 Audio downloaded successfully!")
-            else:
-                bot.send_video(chat_id, video_file, caption="🚀 Video downloaded successfully! Enjoy.")
+                # Render server par video download karne ke bajaye directly steam link stream karna
+                file_res = requests.get(stream_url, stream=True, timeout=30)
                 
-        # Cleanup space after sending
-        os.remove(filename)
+                # Temp file creation
+                temp_filename = f"download_{chat_id}.mp3" if quality_choice == 'audio' else f"download_{chat_id}.mp4"
+                
+                with open(temp_filename, 'wb') as f:
+                    for chunk in file_res.iter_content(chunk_size=8192):
+                        f.write(chunk)
+                        
+                # Send to Telegram
+                with open(temp_filename, 'rb') as final_file:
+                    if quality_choice == 'audio':
+                        bot.send_audio(chat_id, final_file, caption="🎵 Audio fetched via Cobalt successfully!")
+                    else:
+                        bot.send_video(chat_id, final_file, caption="🚀 Video fetched via Cobalt successfully!")
+                
+                os.remove(temp_filename)
+                return
+                
+        bot.send_message(chat_id, "❌ API temporary busy thi. Kripya ek baar phir se try karein.")
         
     except Exception as e:
-        bot.send_message(chat_id, f"❌ *Error aa gaya:* \n`{str(e)[:150]}`", parse_mode='Markdown')
+        bot.send_message(chat_id, f"❌ *Bypass Error:* \n`{str(e)[:100]}`", parse_mode='Markdown')
         
     finally:
-        # Clean session memory data
         if chat_id in user_data:
             del user_data[chat_id]
 
 if __name__ == '__main__':
-    print("Bot is polling...")
     bot.infinity_polling()
+        
